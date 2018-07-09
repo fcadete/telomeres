@@ -1,0 +1,10 @@
+# List of available public datasets
+# Should contain reference, data type and acession code at a minimum
+# This is not a file-per-file record, but a pointer to full datasets (so IP and input will be in the same entry here)
+Data type	Target	Cell type	Acession code	Reference	DOI
+DRIP-seq	NA	HeLa	GSE93368	Hamperl, et al, Cell (2017)	https://doi.org/10.1016/j.cell.2017.07.043
+DRIP-seq	NA	NT2,K562	GSE70189	Sanz, et al, Mol Cell (2016)	https://doi.org/10.1016/j.molcel.2016.05.032
+DRIP-seq	NA	NT2	GSE45530	Ginno, et al, Genome Res. (2013)	https://doi.org/10.1101/gr.158436.113
+ChIP-seq	TRF2,NR2F2,HMBOX1	HeLa,VA13	GSE46237	Marzec, et al, Cell (2015)	https://doi.org/10.1016/j.cell.2015.01.044
+ChIP-seq	TRF1,TRF2	BJ fibroblasts	GSE26005	Simonet, et al, Cell Res. (2011)	https://doi.org/10.1038/cr.2011.40
+ChIP-seq	TRF1,TRF2	LCL	GSE55053	Stong, et al, Genome Res. (2014)	https://doi.org/10.1101/gr.166983.113
