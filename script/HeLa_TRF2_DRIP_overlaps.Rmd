@@ -1,0 +1,187 @@
+---
+title: "TRF2 and R-loop overlap in HeLa"
+output: html_document
+---
+
+Quick proof of concept to see how much overlap there is between the publicly available HeLa TRF2 ChIP-seq and DRIP-seq datasets.
+
+Here are their references:
+
+* TRF-2 ChIP-seq
+    + GEO: GSE46237
+    + Reference: Marzec, et al, Cell (2015)
+    + DOI: https://doi.org/10.1016/j.cell.2015.01.044
+
+* DRIP-seq
+    + GEO: GSE93368
+    + Reference: Hamperl, et al, Cell (2017)
+    + DOI: https://doi.org/10.1016/j.cell.2017.07.043
+
+I'm still using the downloaded processed datasets. So here it goes: load, get ranges, overlap and plot.
+
+```{r}
+library(tidyverse)
+library(GenomicRanges)
+library(rtracklayer)
+
+# TRF2 peaks
+trf2_chip_seq <- read_tsv("../available_data_processed/GSM1126877_TRF2_HeLa_peaks_hg18.bed",
+                            skip = 1,
+                            col_names = c("chr", "start", "end"))
+
+trf2_chip_seq <- with(trf2_chip_seq, GRanges(seqnames = chr,
+                                             ranges = IRanges(start = start,
+                                                              end = end),
+                                             strand = "*",
+                                             seqinfo = SeqinfoForUCSCGenome("hg18")))
+
+ch <- import.chain("../available_data_processed/hg18ToHg19.over.chain")
+
+seqlevelsStyle(trf2_chip_seq) <- "UCSC"
+
+trf2_chip_seq <- unlist(liftOver(trf2_chip_seq, ch))
+
+# Head-on - Head-on collisions
+HO_HO_collisions <- read_tsv("../available_data_processed/GSE93368_DRIP_seq_HeLa_HO_HO_collisions.txt",
+                             col_names = c("chr", "start", "end"))
+HO_HO_collisions <- with(HO_HO_collisions, GRanges(seqnames = chr,
+                                                   ranges = IRanges(start = start,
+                                                                    end = end),
+                                                   strand = "*"))
+
+# Co-directional - co-directional collisions
+CD_CD_collisions <- read_tsv("../available_data_processed/GSE93368_DRIP_seq_HeLa_CD_CD_collisions.txt",
+                             col_names = c("chr", "start", "end"))
+CD_CD_collisions <- with(CD_CD_collisions, GRanges(seqnames = chr,
+                                                   ranges = IRanges(start = start,
+                                                                    end = end),
+                                                   strand = "*"))
+
+# Head-on - co-directional collisions
+HO_CD_collisions <- read_tsv("../available_data_processed/GSE93368_DRIP_seq_HeLa_HO_CD_collisions.txt",
+                             col_names = c("chr", "start", "end", "id", "score", "strand"))
+HO_CD_collisions <- with(HO_CD_collisions, GRanges(seqnames = chr,
+                                                   ranges = IRanges(start = start,
+                                                                    end = end),
+                                                   strand = "*"))
+
+collisions <- c(HO_HO_collisions, CD_CD_collisions, HO_CD_collisions)
+
+```
+
+Okay, sites are loaded. How do they compare in numbers and widths?
+
+```{r}
+
+# Count sites and covered width per chromosome
+print(table(seqnames(trf2_chip_seq)))
+
+print(table(seqnames(collisions)))
+
+print(summary(width(trf2_chip_seq)))
+
+print(summary(width(collisions)))
+
+```
+The discrepancy in number of sites is huge! The TRF2 ChIP-seq dataset has very few sites (`r length(trf2_chip_seq)` in total), compared to the DRIP-seq derived collisions (`r length(collisions)`).
+
+Do they overlap at all?
+
+```{r}
+
+countOverlaps(trf2_chip_seq, collisions)
+
+sum(countOverlaps(trf2_chip_seq, collisions))
+
+```
+
+
+Nope. Not very exciting. Just two overlaps between the TRF2 sites and the collision sites.
+
+What about average DRIP-seq signal around TRF2 sites?
+
+```{r}
+
+trf2_windows <- resize(trf2_chip_seq, width = 1000,  fix = "center")
+trf2_windows <- trim(trf2_windows)
+trf2_windows <- trf2_windows[width(trf2_windows) == 1000]
+
+drip_seq_signal_rep1 <- import("../available_data_processed/GSM2452072_ip_gl3.bw")
+drip_seq_signal_rep1 <- coverage(drip_seq_signal_rep1, weight = drip_seq_signal_rep1$score)
+
+trf2_drip_windows_signal_rep1 <- c()
+
+for (chr in unique(seqnames(trf2_windows))) {
+
+    trf2_drip_windows_signal_rep1 <- rbind(trf2_drip_windows_signal_rep1,
+                               as.matrix(Views(drip_seq_signal_rep1[[chr]],
+                                               ranges(trf2_windows[seqnames(trf2_windows) == chr]))))
+}
+
+drip_seq_signal_rep2 <- import("../available_data_processed/GSM2668157_ip_gl3_rep2.bw")
+drip_seq_signal_rep2 <- coverage(drip_seq_signal_rep2, weight = drip_seq_signal_rep2$score)
+
+trf2_drip_windows_signal_rep2 <- c()
+
+for (chr in unique(seqnames(trf2_windows))) {
+
+    trf2_drip_windows_signal_rep2 <- rbind(trf2_drip_windows_signal_rep2,
+                               as.matrix(Views(drip_seq_signal_rep2[[chr]],
+                                               ranges(trf2_windows[seqnames(trf2_windows) == chr]))))
+}
+
+drip_seq_input_rep1 <- import("../available_data_processed/GSM2452073_input_gl3.bw")
+drip_seq_input_rep1 <- coverage(drip_seq_input_rep1, weight = drip_seq_input_rep1$score)
+
+trf2_drip_windows_input_rep1 <- c()
+
+for (chr in unique(seqnames(trf2_windows))) {
+
+    trf2_drip_windows_input_rep1 <- rbind(trf2_drip_windows_input_rep1,
+                               as.matrix(Views(drip_seq_input_rep1[[chr]],
+                                               ranges(trf2_windows[seqnames(trf2_windows) == chr]))))
+}
+
+
+drip_seq_input_rep2 <- import("../available_data_processed/GSM2668158_input_gl3_rep2.bw")
+drip_seq_input_rep2 <- coverage(drip_seq_input_rep2, weight = drip_seq_input_rep2$score)
+
+trf2_drip_windows_input_rep2 <- c()
+
+for (chr in unique(seqnames(trf2_windows))) {
+
+    trf2_drip_windows_input_rep2 <- rbind(trf2_drip_windows_input_rep2,
+                               as.matrix(Views(drip_seq_input_rep2[[chr]],
+                                               ranges(trf2_windows[seqnames(trf2_windows) == chr]))))
+}
+
+trf2_drip_windows_signal_rep1 %>% reshape2::melt() %>%
+  ggplot(aes(x = Var2, y = Var1, fill = value)) + geom_tile()
+
+trf2_drip_windows_signal_rep2 %>% reshape2::melt() %>%
+  ggplot(aes(x = Var2, y = Var1, fill = value)) + geom_tile()
+
+
+trf2_drip_windows_input_rep1 %>% reshape2::melt() %>%
+  ggplot(aes(x = Var2, y = Var1, fill = value)) + geom_tile()
+
+trf2_drip_windows_input_rep2 %>% reshape2::melt() %>%
+  ggplot(aes(x = Var2, y = Var1, fill = value)) + geom_tile()
+
+
+
+
+
+rbind(trf2_drip_windows_signal_rep1 %>% reshape2::melt() %>% mutate(name = "signal_rep1"),
+      trf2_drip_windows_signal_rep2 %>% reshape2::melt() %>% mutate(name = "signal_rep2"),
+      trf2_drip_windows_input_rep1 %>% reshape2::melt() %>% mutate(name = "input_rep1"),
+      trf2_drip_windows_input_rep2 %>% reshape2::melt() %>% mutate(name = "input_rep2")) %>%
+  group_by(name, Var2) %>%
+  dplyr::summarise(mean_signal = sum(value, na.rm= TRUE)) %>%
+  ggplot(aes(x = Var2, y = mean_signal, colour = name)) + geom_line()
+
+
+
+```
+
+So TRF2 sites don't really seem to have an increase in signal. I better stick with bibliography.
